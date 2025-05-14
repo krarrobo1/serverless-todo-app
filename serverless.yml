@@ -7,13 +7,29 @@ service: todo-app
 
 provider:
   name: aws
-  runtime: nodejs20.x
+  runtime: nodejs18.x
 
 functions:
   api:
-    handler: src/handler.handler
+    handler: src/lambda.handler
     events:
-      - httpApi: "*"
-      
+      - http:
+          path: /api/{proxy+}
+          method: any
+          cors: true
+      # - http:
+      #     path: /swagger
+      #     method: get
+      #     cors: true
+      # - http:
+      #     path: /swagger.json
+      #     method: get
+      #     cors: true
+
 plugins:
+  - serverless-plugin-typescript
   - serverless-offline
+
+custom:
+  serverlessPluginTypescript:
+    tsConfigFileLocation: './tsconfig.json'
