@@ -1,19 +1,84 @@
-# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+# 👤 Your Serverless Dashboard organization (used for monitoring, CI/CD, etc.)
+# Docs: https://www.serverless.com/framework/docs/dashboard
 org: personalkrarrobo
-# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
+
+# 📦 App name in Serverless Dashboard
 app: todoapp
-# "service" is the name of this project. This will also be added to your AWS resource names.
+
+# 🏷️ Service name — used in AWS resource naming
 service: todo-app
 
+# 📦 Package configuration
+# 'individually: true' means each function gets its own deployment artifact.
+# Allows function-level control of files (e.g. for excluding dev files).
+# Docs: https://www.serverless.com/framework/docs/providers/aws/guide/packaging#package-individually
+package:
+  individually: true
+
+# ☁️ AWS Provider configuration
 provider:
   name: aws
-  runtime: nodejs20.x
+  runtime: nodejs18.x # Runtime environment for all functions
 
+# 🚀 Function definitions
 functions:
   api:
-    handler: src/handler.handler
+    handler: src/lambda.handler # Entry point for the Lambda function
     events:
-      - httpApi: "*"
-      
+      - http: # Creates an API Gateway HTTP endpoint
+          path: /api/{proxy+} # Catch-all path
+          method: any         # Accepts any HTTP method
+          cors: true          # Enables CORS headers
+    # Function-level packaging patterns could be added here if needed
+
+# 🔌 Plugins used in this project
 plugins:
-  - serverless-offline
+  - serverless-plugin-typescript # Compiles TypeScript automatically before deploy
+  - serverless-offline           # Allows running and testing functions locally
+
+# ⚙️ Custom config for plugins
+custom:
+  serverlessPluginTypescript:
+    tsConfigFileLocation: './tsconfig.json' # TypeScript compiler config
+
+# 🔧 AWS CloudFormation Resources
+resources:
+  Resources:
+
+    # 🔐 IAM Role for API Gateway to write logs to CloudWatch
+    # Docs: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-logging.html
+    ApiGatewayCloudWatchRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: serverlessApiGatewayCloudWatchRole # Friendly name for easy tracking
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: apigateway.amazonaws.com # API Gateway is allowed to assume this role
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: ApiGatewayCloudWatchLogsPolicy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup      # Create new log groups
+                    - logs:CreateLogStream     # Create log streams for request logs
+                    - logs:DescribeLogGroups   # Read existing log group metadata
+                    - logs:DescribeLogStreams  # Read existing log stream metadata
+                    - logs:PutLogEvents        # Actually write log events (important!)
+                    - logs:GetLogEvents        # Read logs if needed
+                    - logs:FilterLogEvents     # Useful for CloudWatch Insights
+                  Resource: "*" # Applies to all logs (can be scoped down in production)
+
+    # 🔗 Associates the IAM role above with the API Gateway service in this account
+    # This step is required — otherwise API Gateway won't know which role to use
+    # Docs: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-apigateway-account.html
+    ApiGatewayAccount:
+      Type: AWS::ApiGateway::Account
+      Properties:
+        CloudWatchRoleArn:
+          Fn::GetAtt: [ApiGatewayCloudWatchRole, Arn] # Reference the ARN of the IAM role above
